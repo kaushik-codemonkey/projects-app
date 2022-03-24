@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+   <head>
+      <style>
+         table, th, td {
+         border: 1px solid black;
+         }
+      </style>
+   </head>
+   <body>
+      <h1>Projects</h1>
+      <button onclick="localStorage.removeItem('demo-token');document.getElementById('loginform').hidden = false;document.getElementById('tableview').hidden = true;document.getElementById('logout').hidden=true;" hidden id="logout">Logout</button>
+      <form onsubmit="event.preventDefault(); loginSubmit();" id="loginform">
+         <h2>Login Form</h2>
+         <div>
+            <label for="username">Username</label>
+            <input type="text" name="username" id="username" />
+         </div>
+         <div>
+            <label for="password">Password</label>
+            <input type="password" name="password" id="password" />
+         </div>
+         <button type="submit">Submit</button>
+      </form>
+      <div id="tableview" hidden>
+         <div>
+            <label for="sort">Sort</label>
+            <select name="sort" onchange="onSortChange();" id="sort">
+               <option value="created">Recent Projects</option>
+               <option value="category">Order By Category Name ASC</option>
+               <option value="username">Order By Username Asc</option>
+               <option value="project">Order By Project Title Asc</option>
+            </select>
+         </div>
+         <br/>
+         <div>
+            <table>
+               <thead>
+                  <th>Project Name</th>
+                  <th>User Name</th>
+                  <th>Category</th>
+                  </th>
+               <tbody>
+               </tbody>
+            </table>
+         </div>
+         <br/>
+         <div>
+            <button id="prevpage" disabled onclick="onPaginationButtonClick('prev')">
+            &lt;&lt;prev
+            </button>
+            <button id="nextpage" onclick="onPaginationButtonClick('next')">
+            &gt;&gt;next
+            </button>
+         </div>
+      </div>
+      <script>
+         let tableData;
+         let token = localStorage.getItem("demo-token");
+         const afterLogin = async ()=>{
+             
+                 //if token is verified -- fetch table data
+                 tableData = await fetch("/api/project", {
+             method: "get",
+             mode: "cors",
+             headers: {
+               "Content-Type": "application/json",
+               authorization: "Bearer " + token,
+             },
+           })
+             .then((response) => response.json())
+             if (!tableData.error) {
+             const tableBody = document.getElementsByTagName('tbody')[0]
+             tableBody.innerHTML="";
+             //diable button based on pagination data
+             let {current,limit, total} = tableData.pagination
+             document.getElementById('nextpage').disabled = (current*limit) > total
+             document.getElementById('prevpage').disabled = current===1
+         
+             tableData.data.forEach(element => {
+                 var row=document.createElement('tr')
+                 var titleData = document.createElement('td')
+                 titleData.innerText = element.title || "-"
+                 var usernameData = document.createElement('td')
+                 usernameData.innerText = element.username || "-"
+                 var categoryData = document.createElement('td')
+                 categoryData.innerText = element.category_name || "-"
+                 row.appendChild(titleData)
+                 row.appendChild(usernameData)
+                 row.appendChild(categoryData);
+                 tableBody.appendChild(row)
+             });
+               }
+         }
+         (async () => {
+         if( token) {
+            //Hit verify token api to validate the token on load
+            let verifytoken = await fetch("/api/user/verifytoken", {
+             method: "get",
+             mode: "cors",
+             headers: {
+               "Content-Type": "application/json",
+               authorization: "Bearer " + token,
+             },
+           })
+             .then((response) => response.json())
+             .then((res) => {
+               if (!res.error) {
+                 if (res.verified) {
+                   document.getElementById("loginform").hidden = true;
+                   document.getElementById("tableview").hidden = false;
+                   document.getElementById('logout').hidden = false;
+                   return res.verified
+                 }
+               }
+               return res?.verified
+             })
+             if(verifytoken){afterLogin();
+             }
+             
+         };
+         
+         })();
+         //function to run on sort change
+         async function onSortChange() {
+         const selectedSort = document.getElementById("sort").value;
+         
+                 //if token is verified -- fetch table data
+                 tableData = await fetch(`/api/project?orderBy=${selectedSort}`, {
+             method: "get",
+             mode: "cors",
+             headers: {
+               "Content-Type": "application/json",
+               authorization: "Bearer " + token,
+             },
+           })
+             .then((response) => response.json())
+             if (!tableData.error) {
+             const tableBody = document.getElementsByTagName('tbody')[0]
+             tableBody.innerHTML=""
+             //diable button based on pagination data
+             let {current,limit, total} = tableData.pagination
+             document.getElementById('nextpage').disabled = (current*limit) > total
+             document.getElementById('prevpage').disabled = current===1
+         
+             tableData.data.forEach(element => {
+                 var row=document.createElement('tr')
+                 var titleData = document.createElement('td')
+                 titleData.innerText = element.title || "-"
+                 var usernameData = document.createElement('td')
+                 usernameData.innerText = element.username || "-"
+                 var categoryData = document.createElement('td')
+                 categoryData.innerText = element.category_name || "-"
+                 row.appendChild(titleData)
+                 row.appendChild(usernameData)
+                 row.appendChild(categoryData);
+                 tableBody.appendChild(row)
+             });
+               }
+         }
+         
+         //function to run on login submit
+         async function loginSubmit() {
+         const username = document.getElementById("username").value;
+         const password = document.getElementById("password").value;
+         await fetch("/api/user/login", {
+           method: "post",
+           mode: "cors",
+           headers: {
+             "Content-Type": "application/json",
+             // 'Content-Type': 'application/x-www-form-urlencoded',
+           },
+           body: JSON.stringify({
+             username,
+             password,
+           }),
+         })
+           .then((response) => response.json())
+           .then((res) => {
+             if (!res.error) {
+               localStorage.setItem("demo-token", res.token);
+               document.getElementById("loginform").hidden = true;
+               document.getElementById("tableview").hidden = false;
+               document.getElementById('logout').hidden = false;
+               token = res.token
+               afterLogin()
+         
+         
+               //   location.assign("/projects");
+             }
+             console.log(res);
+           });
+         console.log(username, password);
+         return true;
+         }
+         
+         //on clicking pagination button
+         async function onPaginationButtonClick (type){
+           //type - next / prev
+         
+           const selectedSort = document.getElementById("sort").value;
+         console.log(selectedSort);
+         
+         //logic to calculate pageNumber
+         let {current,limit,total} = tableData.pagination;
+         
+         
+                 //if token is verified -- fetch table data
+                 tableData = await fetch(`/api/project?orderBy=${selectedSort}&page=${type==="prev"?current-1:current+1}`, {
+             method: "get",
+             mode: "cors",
+             headers: {
+               "Content-Type": "application/json",
+               authorization: "Bearer " + token,
+             },
+           })
+             .then((response) => response.json())
+             if (!tableData.error) {
+             const tableBody = document.getElementsByTagName('tbody')[0]
+             tableBody.innerHTML=""
+             //diable button based on pagination data
+             let {current,limit, total} = tableData.pagination
+             document.getElementById('nextpage').disabled = (current*limit) > total
+             document.getElementById('prevpage').disabled = current===1
+              
+             tableData.data.forEach(element => {
+                 var row=document.createElement('tr')
+                 var titleData = document.createElement('td')
+                 titleData.innerText = element.title || "-"
+                 var usernameData = document.createElement('td')
+                 usernameData.innerText = element.username || "-"
+                 var categoryData = document.createElement('td')
+                 categoryData.innerText = element.category_name || "-"
+                 row.appendChild(titleData)
+                 row.appendChild(usernameData)
+                 row.appendChild(categoryData);
+                 tableBody.appendChild(row)
+             });
+               }
+         
+         }
+      </script>
+   </body>
+</html>
